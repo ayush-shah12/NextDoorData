@@ -13,3 +13,6 @@ idev_*.*
 # Scripts
 scripts/
 test.py
+
+# Data
+businesses.csv
