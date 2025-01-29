@@ -10,7 +10,7 @@ from keys import KEYS
 from scrape.models import Business
 
 
-def retry(retries=3, return_value=None):
+def retry(retries=5, return_value=None):
     """Retry decorator"""
 
     def decorator(func):
@@ -52,7 +52,7 @@ def fetch_data(url: str, use_premium: bool = False, render: bool = False) -> str
     return response.text
 
 
-@retry(retries=3)
+@retry(retries=5)
 def get_businesses(city: str, state: str, category: str, use_premium=False) -> List[Business]:
     """Get businesses of a specific category in a specific city, state"""
 
@@ -63,10 +63,12 @@ def get_businesses(city: str, state: str, category: str, use_premium=False) -> L
 
     business_links = list(set([a["href"] for a in soup.find_all("a", href=True) if "/pages/" in a["href"]]))
 
+    logfire.info(f"Found {len(business_links)} businesses in {city}, {state} for category {category}")
+
     return [Business(next_door_url=link) for link in business_links]
     
 
-@retry(retries=3)
+@retry(retries=5)
 def get_individual_businesses(business: Business, use_premium=False) -> Business:
     """Get individual businesses"""
 
@@ -107,12 +109,16 @@ def write_to_csv(businesses: List[Business], filename="businesses.csv"):
 
         if file.tell() == 0:
             writer.writerow([
-                "Name", "Street Address", "City", "State", "Zip Code", "Phone", "Email", "Website", "Categories"
+                "Name", "Street Address", "City", "State", "Zip Code", "Phone", "Email", "Website", "NextDoor URL", "Categories"
             ])
         for business in businesses:
+            if not business:
+                logfire.warn("Came Across a None Object")
+                continue
+            
             writer.writerow([
                 business.name, business.street, business.city, business.state, business.zip_code,
-                business.phone, business.email, business.website, ", ".join(business.categories)
+                business.phone, business.email, business.website, business.next_door_url, ", ".join(business.categories)
             ])
 
 
@@ -130,7 +136,8 @@ def get_businesses_multithreaded(city: str, state: str, categories: List[str], u
         for future in concurrent.futures.as_completed(futures):
             try:
                 businesses = future.result()
-                all_businesses.extend(businesses)
+                if businesses:
+                    all_businesses.extend(businesses)
             except Exception as e:
                 logfire.error(f"Error fetching businesses: {e}")
 
@@ -150,7 +157,8 @@ def get_individual_businesses_multithreaded(businesses: List[Business], use_prem
         for future in concurrent.futures.as_completed(futures):
             try:
                 updated_business = future.result() 
-                updated_businesses.append(updated_business)
+                if updated_business:
+                    updated_businesses.append(updated_business)
             except Exception as e:
                 logfire.error(f"Error fetching individual business details: {e}")
 
