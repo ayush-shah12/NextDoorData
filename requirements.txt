@@ -1,0 +1,2 @@
+pydantic>=2.9.2
+logfire[fastapi] >= 2.5.0
