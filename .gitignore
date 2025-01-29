@@ -12,3 +12,4 @@ idev_*.*
 
 # Scripts
 scripts/
+test.py

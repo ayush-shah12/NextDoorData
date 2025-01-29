@@ -1,9 +1,6 @@
-import json
-import math
 import time
 from functools import wraps
 import logfire
-from pydantic import ValidationError
 from typing import List
 import requests
 from bs4 import BeautifulSoup
@@ -27,11 +24,6 @@ def retry(retries=3, return_value=None):
                     logfire.error(f"Error in {func.__name__} {args} {e}")
                     if attempt < retries:
                         logfire.info(f"Retrying {func.__name__} {args} attempt {attempt + 1} of {retries}")
-
-                        if func.__name__ == "get_businesses" or func.__name__ == "get_individual_businesses":
-                            kwargs['use_premium'] = True
-                            logfire.info(f"Retrying with PREMIUM for {func.__name__} {args} attempt {attempt + 1} of {retries}")
-                        
                         time.sleep(3)
                     else:
                         logfire.error(f"MAJOR ERROR: ALL {retries} attempts failed for {func.__name__} {args} {e}")
@@ -50,8 +42,7 @@ def fetch_data(url: str, use_premium: bool = False, render: bool = False) -> str
     if render:
         payload['render'] = 'true'
 
-    if use_premium:
-        payload['premium'] = 'true'
+    payload['premium'] = 'true'
 
     logfire.info(f"Fetching {url}")
 
@@ -106,3 +97,61 @@ def get_individual_businesses(business: Business, use_premium=False) -> Business
     business.categories = categories
 
     return business
+
+
+def write_to_csv(businesses: List[Business], filename="businesses.csv"):
+    """Write business data to a CSV file"""
+
+    with open(filename, mode="a", newline="") as file:
+        writer = csv.writer(file)
+
+        if file.tell() == 0:
+            writer.writerow([
+                "Name", "Street Address", "City", "State", "Zip Code", "Phone", "Email", "Website", "Categories"
+            ])
+        for business in businesses:
+            writer.writerow([
+                business.name, business.street, business.city, business.state, business.zip_code,
+                business.phone, business.email, business.website, ", ".join(business.categories)
+            ])
+
+
+def get_businesses_multithreaded(city: str, state: str, categories: List[str], use_premium=False) -> List[Business]:
+
+    all_businesses = []
+
+    def fetch_for_category(category: str):
+        businesses = get_businesses(city, state, category, use_premium)
+        return businesses
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        futures = [executor.submit(fetch_for_category, category) for category in categories]
+
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                businesses = future.result()
+                all_businesses.extend(businesses)
+            except Exception as e:
+                logfire.error(f"Error fetching businesses: {e}")
+
+    return all_businesses
+
+
+def get_individual_businesses_multithreaded(businesses: List[Business], use_premium=False) -> List[Business]:
+
+    def fetch_individual(business: Business):
+        return get_individual_businesses(business, use_premium)
+
+    updated_businesses = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        futures = [executor.submit(fetch_individual, business) for business in businesses]
+
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                updated_business = future.result() 
+                updated_businesses.append(updated_business)
+            except Exception as e:
+                logfire.error(f"Error fetching individual business details: {e}")
+
+    return updated_businesses
