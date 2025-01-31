@@ -128,6 +128,10 @@ def write_to_csv(businesses: List[Business], filename="businesses.csv"):
                 logfire.warn("Came Across a None Object")
                 continue
             
+            if not business.name or (not business.phone and not business.email):
+                logfire.warn(f"Skipping {business.next_door_url} due to missing data")
+                continue
+            
             writer.writerow([
                 business.name, business.street, business.city, business.state, business.zip_code,
                 business.phone, business.email, business.website, business.next_door_url, ", ".join(business.categories)
