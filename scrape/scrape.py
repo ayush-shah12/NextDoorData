@@ -20,12 +20,21 @@ def retry(retries=5, return_value=None):
         def wrapper(*args, **kwargs):
             for attempt in range(1, retries + 1):
                 try:
-
                     return func(*args, **kwargs)
                 except Exception as e:
                     logfire.error(f"Error in {func.__name__} {args} {e}")
                     if attempt < retries:
-                        logfire.info(f"Retrying {func.__name__} {args} attempt {attempt + 1} of {retries}")
+                        if 'use_premium' in kwargs:
+                            kwargs['use_premium'] = True
+                            logfire.info(f"Retrying WITH PREMIUM KWARGS {func.__name__} {args} attempt {attempt + 1} of {retries}")
+                        else:
+                            args = list(args)
+                            if len(args) == 4:
+                                args = (args[0], args[1], args[2], True)
+                                logfire.info(f"Retrying WITH PREMIUM ARGS {func.__name__} {args} attempt {attempt + 1} of {retries}")
+                            elif len(args) == 2:
+                                args = (args[0], True)
+                                logfire.info(f"Retrying WITH PREMIUM ARGS {func.__name__} {args} attempt {attempt + 1} of {retries}")
                         time.sleep(3)
                     else:
                         logfire.error(f"MAJOR ERROR: ALL {retries} attempts failed for {func.__name__} {args} {e}")
@@ -44,7 +53,8 @@ def fetch_data(url: str, use_premium: bool = False, render: bool = False) -> str
     if render:
         payload['render'] = 'true'
 
-    payload['premium'] = 'true'
+    if use_premium:
+        payload['premium'] = 'true'
 
     logfire.info(f"Fetching {url}")
 
