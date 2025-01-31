@@ -9,6 +9,8 @@ import csv
 from keys import KEYS
 from scrape.models import Business
 
+MAX_WORKERS = 10
+
 
 def retry(retries=5, return_value=None):
     """Retry decorator"""
@@ -120,6 +122,7 @@ def write_to_csv(businesses: List[Business], filename="businesses.csv"):
                 business.name, business.street, business.city, business.state, business.zip_code,
                 business.phone, business.email, business.website, business.next_door_url, ", ".join(business.categories)
             ])
+    logfire.info(f"Data written to {filename}")
 
 
 def get_businesses_multithreaded(city: str, state: str, categories: List[str], use_premium=False) -> List[Business]:
@@ -130,7 +133,7 @@ def get_businesses_multithreaded(city: str, state: str, categories: List[str], u
         businesses = get_businesses(city, state, category, use_premium)
         return businesses
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(fetch_for_category, category) for category in categories]
 
         for future in concurrent.futures.as_completed(futures):
@@ -151,7 +154,7 @@ def get_individual_businesses_multithreaded(businesses: List[Business], use_prem
 
     updated_businesses = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(fetch_individual, business) for business in businesses]
 
         for future in concurrent.futures.as_completed(futures):
